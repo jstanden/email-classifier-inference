@@ -9,16 +9,21 @@ A FastAPI server for email classification using a HuggingFace transformer model 
 - **Confidence Scores**: Get confidence scores for all classification labels
 - **OpenAPI Documentation**: Interactive API documentation
 - **Health Checks**: Monitor API and model status
-- **GPU Support**: Automatic GPU detection and utilization
+- **GPU Support**: Automatic GPU detection and utilization (MPS, CUDA, CPU)
+- **Docker Support**: Easy containerized deployment
+- **Consistent Preprocessing**: Uses inference_hook for training-inference consistency
 
 ## Setup
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.8+ (for local development)
+- Docker & Docker Compose (for containerized deployment)
 - The `email_classifier_final` model files in the `models/` directory
 
 ### Installation
+
+#### Option 1: Local Development
 
 1. Install dependencies:
 ```bash
@@ -36,15 +41,56 @@ models/
     └── ...
 ```
 
-### Running the Server
-
+3. Run the server:
 ```bash
 python main.py
 ```
 
-Or using uvicorn directly:
+Or using the startup script:
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+./start_server.sh
+```
+
+#### Option 2: Docker Deployment (Recommended)
+
+1. **Quick Start**:
+```bash
+./deploy.sh run
+```
+
+2. **Manual Docker Commands**:
+```bash
+# Build the image
+docker build -t email-classifier-api .
+
+# Run the container
+docker run -p 8000:8000 email-classifier-api
+```
+
+3. **Using Docker Compose**:
+```bash
+# Build and start
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
+```
+
+### Deployment Script
+
+The `deploy.sh` script provides easy management commands:
+
+```bash
+./deploy.sh build     # Build the Docker image
+./deploy.sh run       # Build and start the API
+./deploy.sh stop      # Stop the container
+./deploy.sh restart   # Restart the container
+./deploy.sh logs      # View logs
+./deploy.sh status    # Check API health
+./deploy.sh cleanup   # Remove all containers and images
 ```
 
 The server will be available at `http://localhost:8000`
@@ -177,8 +223,7 @@ for i, email_result in enumerate(batch_result['results']):
       "label": "Marketing",
       "score": 0.0310
     }
-  ],
-  "combined_text": "Subject: Invoice for services\n\nBody: Please find attached the invoice for the services provided last month."
+  ]
 }
 ```
 
@@ -196,8 +241,7 @@ for i, email_result in enumerate(batch_result['results']):
           "label": "Support",
           "score": 0.0456
         }
-      ],
-      "combined_text": "Subject: Invoice for services\n\nBody: Please find attached the invoice for the services provided last month."
+      ]
     },
     {
       "classifications": [
@@ -209,8 +253,7 @@ for i, email_result in enumerate(batch_result['results']):
           "label": "Billing",
           "score": 0.1234
         }
-      ],
-      "combined_text": "Subject: Technical support request\n\nBody: I need help with my account login."
+      ]
     }
   ],
   "total_emails": 2,
@@ -230,9 +273,10 @@ The API uses the `email_classifier_final` model, which is a text classification 
 
 - Combines email subject and body for classification
 - Returns confidence scores for all possible labels
-- Supports GPU acceleration when available
+- Supports GPU acceleration when available (MPS, CUDA, CPU)
 - Automatically loads on server startup
 - Supports 15 classification labels: Memberships, Integrations, CX Security, B5, Marketing, CX Community, Extensions, Windows, XAM, Linux, Mac, MSP, Billing, Android, iOS
+- Uses consistent preprocessing via `inference_hook.py`
 
 ## Performance Considerations
 
@@ -247,6 +291,36 @@ The API uses the `email_classifier_final` model, which is a text classification 
 - Processing time scales linearly with batch size
 - Automatic validation prevents oversized requests
 
+### Hardware Acceleration
+
+The API automatically detects and uses the best available hardware:
+- **MPS (Apple Silicon)**: ~3-5x faster than CPU on Mac M1/M2/M3
+- **CUDA (NVIDIA)**: ~5-10x faster than CPU on systems with NVIDIA GPUs
+- **CPU**: Reliable fallback for all systems
+
+## Docker Configuration
+
+### Container Features
+
+- **Multi-stage build**: Optimized for size and security
+- **Non-root user**: Enhanced security
+- **Health checks**: Automatic monitoring
+- **Resource limits**: Memory and CPU constraints
+- **Volume mounts**: Optional model and log persistence
+
+### Environment Variables
+
+```bash
+PYTHONUNBUFFERED=1    # Real-time logging
+PORT=8000             # API port
+```
+
+### Resource Requirements
+
+- **Memory**: 2-4GB recommended (model loading + inference)
+- **CPU**: 2+ cores recommended
+- **Storage**: ~500MB for base image + model files
+
 ## Error Handling
 
 The API includes comprehensive error handling for:
@@ -256,6 +330,7 @@ The API includes comprehensive error handling for:
 - Missing model files
 - Batch size limits
 - Empty batch requests
+- Hardware detection issues
 
 ## Development
 
@@ -263,10 +338,15 @@ The API includes comprehensive error handling for:
 ```
 .
 ├── main.py              # FastAPI application
+├── inference_hook.py    # Preprocessing pipeline
 ├── requirements.txt     # Python dependencies
+├── Dockerfile          # Container configuration
+├── docker-compose.yml  # Multi-container setup
+├── deploy.sh           # Deployment script
+├── .dockerignore       # Docker build optimization
 ├── README.md           # This file
 ├── test_api.py         # Test script
-├── start_server.sh     # Startup script
+├── start_server.sh     # Local startup script
 └── models/
     └── email_classifier_final/
         └── ...         # Model files
@@ -304,6 +384,14 @@ You can configure the server using environment variables:
 2. **CUDA out of memory**: The model will automatically fall back to CPU if GPU memory is insufficient
 3. **Import errors**: Make sure all dependencies are installed with `pip install -r requirements.txt`
 4. **Batch size exceeded**: Reduce the number of emails in your batch request (max 100)
+5. **Docker build fails**: Check that all required files are present and not excluded by `.dockerignore`
+
+### Docker-Specific Issues
+
+1. **Container won't start**: Check logs with `docker-compose logs -f`
+2. **Out of memory**: Increase Docker memory limits or reduce batch sizes
+3. **Port conflicts**: Change the port mapping in `docker-compose.yml`
+4. **Model loading slow**: Consider using volume mounts for persistent model storage
 
 ### Logs
 
@@ -312,5 +400,25 @@ The application logs important events including:
 - Classification requests
 - Batch processing statistics
 - Error messages
+- Hardware detection results
 
-Check the console output for detailed logs. 
+Check the console output for detailed logs:
+- **Local**: Direct console output
+- **Docker**: `docker-compose logs -f`
+
+## Production Deployment
+
+### Recommended Setup
+
+1. **Use Docker Compose** for easy management
+2. **Set resource limits** to prevent memory issues
+3. **Enable health checks** for monitoring
+4. **Use volume mounts** for model persistence
+5. **Configure logging** for production monitoring
+
+### Scaling Considerations
+
+- **Horizontal scaling**: Run multiple container instances behind a load balancer
+- **Model caching**: Consider using shared model storage
+- **Batch optimization**: Adjust batch sizes based on available resources
+- **Monitoring**: Implement proper logging and metrics collection 
