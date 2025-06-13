@@ -77,6 +77,8 @@ def test_classification():
         print(f"Subject: {email['subject']}")
         print(f"Body: {email['body']}")
         
+        # Test default mode (top prediction only)
+        print("  Testing default mode (top prediction only):")
         try:
             response = requests.post(
                 f"{BASE_URL}/classify",
@@ -84,18 +86,40 @@ def test_classification():
                 headers={"Content-Type": "application/json"}
             )
             
-            print(f"Status: {response.status_code}")
+            print(f"  Status: {response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
-                print("Classifications:")
-                for classification in result["classifications"]:
-                    print(f"  {classification['label']}: {classification['score']:.4f}")
+                print(f"  Top classification: {result['classifications'][0]['label']} ({result['classifications'][0]['score']:.4f})")
+                print(f"  Total predictions returned: {len(result['classifications'])}")
             else:
-                print(f"Error: {response.text}")
+                print(f"  Error: {response.text}")
                 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"  Error: {e}")
+        
+        # Test show_all_scores mode
+        print("  Testing show_all_scores mode:")
+        try:
+            response = requests.post(
+                f"{BASE_URL}/classify?show_all_scores=true",
+                json=email,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            print(f"  Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"  Top 3 classifications:")
+                for j, classification in enumerate(result['classifications'][:3], 1):
+                    print(f"    {j}. {classification['label']}: {classification['score']:.4f}")
+                print(f"  Total predictions returned: {len(result['classifications'])}")
+            else:
+                print(f"  Error: {response.text}")
+                
+        except Exception as e:
+            print(f"  Error: {e}")
 
 def test_batch_classification():
     """Test the batch classification endpoint"""
@@ -128,6 +152,8 @@ def test_batch_classification():
     
     print(f"Testing batch classification with {len(batch_emails)} emails...")
     
+    # Test default mode (top prediction only)
+    print("\nTesting default mode (top prediction only):")
     try:
         response = requests.post(
             f"{BASE_URL}/classify-batch",
@@ -144,11 +170,36 @@ def test_batch_classification():
             print(f"  Processing time: {result['processing_time_ms']}ms")
             print(f"  Average time per email: {result['processing_time_ms'] / result['total_emails']:.2f}ms")
             
-            print("\nResults:")
+            print("\nResults (top prediction only):")
             for i, email_result in enumerate(result['results'], 1):
-                print(f"\nEmail {i}:")
-                print(f"  Subject: {batch_emails[i-1]['subject']}")
-                print("  Top classifications:")
+                print(f"  Email {i}: {email_result['classifications'][0]['label']} ({email_result['classifications'][0]['score']:.4f})")
+        else:
+            print(f"Error: {response.text}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    # Test show_all_scores mode
+    print("\nTesting show_all_scores mode:")
+    try:
+        response = requests.post(
+            f"{BASE_URL}/classify-batch?show_all_scores=true",
+            json=batch_request,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        print(f"Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"Batch processing completed:")
+            print(f"  Total emails: {result['total_emails']}")
+            print(f"  Processing time: {result['processing_time_ms']}ms")
+            print(f"  Average time per email: {result['processing_time_ms'] / result['total_emails']:.2f}ms")
+            
+            print("\nResults (all scores):")
+            for i, email_result in enumerate(result['results'], 1):
+                print(f"  Email {i} top 3 classifications:")
                 for j, classification in enumerate(email_result['classifications'][:3], 1):
                     print(f"    {j}. {classification['label']}: {classification['score']:.4f}")
         else:

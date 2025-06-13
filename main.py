@@ -1,9 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 from contextlib import asynccontextmanager
 from inference_hook import customize_email_for_inference
@@ -127,11 +127,22 @@ async def health_check():
     }
 
 @app.post("/classify", response_model=EmailResponse)
-async def classify_email(request: EmailRequest):
+async def classify_email(
+    request: EmailRequest,
+    show_all_scores: bool = Query(
+        default=False, 
+        description="If True, return all classification scores. If False, return only the top prediction."
+    )
+):
     """
     Classify an email based on its subject and body.
     
-    Returns all classification labels with their confidence scores.
+    Args:
+        request: Email data containing subject and body
+        show_all_scores: If True, return all classification scores. If False, return only the top prediction.
+    
+    Returns:
+        Classification results with confidence scores.
     """
     if classifier is None:
         raise HTTPException(status_code=500, detail="Model not loaded")
@@ -148,15 +159,21 @@ async def classify_email(request: EmailRequest):
         results = classifier(combined_text)
         
         # Extract classifications from the first (and only) result
-        classifications = []
+        all_classifications = []
         for result in results[0]:
-            classifications.append(ClassificationResult(
+            all_classifications.append(ClassificationResult(
                 label=result['label'],
                 score=float(result['score'])
             ))
         
         # Sort by confidence score (highest first)
-        classifications.sort(key=lambda x: x.score, reverse=True)
+        all_classifications.sort(key=lambda x: x.score, reverse=True)
+        
+        # Return all scores or just the top one based on parameter
+        if show_all_scores:
+            classifications = all_classifications
+        else:
+            classifications = [all_classifications[0]] if all_classifications else []
         
         return EmailResponse(
             classifications=classifications
@@ -167,14 +184,25 @@ async def classify_email(request: EmailRequest):
         raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}")
 
 @app.post("/classify-batch", response_model=BatchEmailResponse)
-async def classify_emails_batch(request: BatchEmailRequest):
+async def classify_emails_batch(
+    request: BatchEmailRequest,
+    show_all_scores: bool = Query(
+        default=False, 
+        description="If True, return all classification scores for each email. If False, return only the top prediction for each email."
+    )
+):
     """
     Classify multiple emails in a single request.
     
     This endpoint is more efficient for processing large volumes of emails
     as it reduces the overhead of multiple HTTP requests.
     
-    Returns classifications for all emails with processing time information.
+    Args:
+        request: Batch of emails to classify
+        show_all_scores: If True, return all classification scores for each email. If False, return only the top prediction for each email.
+    
+    Returns:
+        Classifications for all emails with processing time information.
     """
     if classifier is None:
         raise HTTPException(status_code=500, detail="Model not loaded")
@@ -203,15 +231,21 @@ async def classify_emails_batch(request: BatchEmailRequest):
             classification_results = classifier(combined_text)
             
             # Extract classifications from the first (and only) result
-            classifications = []
+            all_classifications = []
             for result in classification_results[0]:
-                classifications.append(ClassificationResult(
+                all_classifications.append(ClassificationResult(
                     label=result['label'],
                     score=float(result['score'])
                 ))
             
             # Sort by confidence score (highest first)
-            classifications.sort(key=lambda x: x.score, reverse=True)
+            all_classifications.sort(key=lambda x: x.score, reverse=True)
+            
+            # Return all scores or just the top one based on parameter
+            if show_all_scores:
+                classifications = all_classifications
+            else:
+                classifications = [all_classifications[0]] if all_classifications else []
             
             results.append(EmailResponse(
                 classifications=classifications

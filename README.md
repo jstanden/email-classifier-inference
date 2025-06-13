@@ -108,11 +108,15 @@ The server will be available at `http://localhost:8000`
 ### 3. Single Email Classification
 - **POST** `/classify`
 - Classifies a single email based on subject and body
+- **Query Parameters:**
+  - `show_all_scores` (bool, default: false): If true, returns all classification scores. If false, returns only the top prediction.
 
 ### 4. Batch Email Classification
 - **POST** `/classify-batch`
 - Classifies multiple emails in a single request (up to 100 emails)
 - More efficient for processing large volumes of emails
+- **Query Parameters:**
+  - `show_all_scores` (bool, default: false): If true, returns all classification scores for each email. If false, returns only the top prediction for each email.
 
 ## Usage Examples
 
@@ -125,7 +129,7 @@ curl http://localhost:8000/health
 # Get model info
 curl http://localhost:8000/model-info
 
-# Classify a single email
+# Classify a single email (top prediction only - default)
 curl -X POST "http://localhost:8000/classify" \
      -H "Content-Type: application/json" \
      -d '{
@@ -133,8 +137,36 @@ curl -X POST "http://localhost:8000/classify" \
        "body": "Please find attached the invoice for the services provided last month."
      }'
 
-# Classify multiple emails
+# Classify a single email (all scores)
+curl -X POST "http://localhost:8000/classify?show_all_scores=true" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "subject": "Invoice for services",
+       "body": "Please find attached the invoice for the services provided last month."
+     }'
+
+# Classify multiple emails (top prediction only - default)
 curl -X POST "http://localhost:8000/classify-batch" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "emails": [
+         {
+           "subject": "Invoice for services",
+           "body": "Please find attached the invoice for the services provided last month."
+         },
+         {
+           "subject": "Technical support request",
+           "body": "I need help with my account login."
+         },
+         {
+           "subject": "Special offer",
+           "body": "Get 50% off all premium features this week!"
+         }
+       ]
+     }'
+
+# Classify multiple emails (all scores)
+curl -X POST "http://localhost:8000/classify-batch?show_all_scores=true" \
      -H "Content-Type: application/json" \
      -d '{
        "emails": [
@@ -159,7 +191,7 @@ curl -X POST "http://localhost:8000/classify-batch" \
 ```python
 import requests
 
-# Single email classification
+# Single email classification (top prediction only - default)
 response = requests.post(
     "http://localhost:8000/classify",
     json={
@@ -169,11 +201,25 @@ response = requests.post(
 )
 
 result = response.json()
-print("Classifications:")
+print("Top classification:")
+top_class = result["classifications"][0]
+print(f"  {top_class['label']}: {top_class['score']:.4f}")
+
+# Single email classification (all scores)
+response = requests.post(
+    "http://localhost:8000/classify?show_all_scores=true",
+    json={
+        "subject": "Invoice for services",
+        "body": "Please find attached the invoice for the services provided last month."
+    }
+)
+
+result = response.json()
+print("All classifications:")
 for classification in result["classifications"]:
     print(f"  {classification['label']}: {classification['score']:.4f}")
 
-# Batch email classification
+# Batch email classification (top prediction only - default)
 batch_response = requests.post(
     "http://localhost:8000/classify-batch",
     json={
@@ -203,11 +249,54 @@ for i, email_result in enumerate(batch_result['results']):
     print(f"\nEmail {i+1} top classification:")
     top_class = email_result['classifications'][0]
     print(f"  {top_class['label']}: {top_class['score']:.4f}")
+
+# Batch email classification (all scores)
+batch_response = requests.post(
+    "http://localhost:8000/classify-batch?show_all_scores=true",
+    json={
+        "emails": [
+            {
+                "subject": "Invoice for services",
+                "body": "Please find attached the invoice for the services provided last month."
+            },
+            {
+                "subject": "Technical support request",
+                "body": "I need help with my account login."
+            },
+            {
+                "subject": "Special offer",
+                "body": "Get 50% off all premium features this week!"
+            }
+        ]
+    }
+)
+
+batch_result = batch_response.json()
+print(f"Batch processing completed:")
+print(f"  Total emails: {batch_result['total_emails']}")
+print(f"  Processing time: {batch_result['processing_time_ms']}ms")
+
+for i, email_result in enumerate(batch_result['results']):
+    print(f"\nEmail {i+1} all classifications:")
+    for j, classification in enumerate(email_result['classifications'], 1):
+        print(f"  {j}. {classification['label']}: {classification['score']:.4f}")
 ```
 
 ### Example Responses
 
-#### Single Email Response
+#### Single Email Response (Default - Top Prediction Only)
+```json
+{
+  "classifications": [
+    {
+      "label": "Billing",
+      "score": 0.9234
+    }
+  ]
+}
+```
+
+#### Single Email Response (All Scores)
 ```json
 {
   "classifications": [
@@ -227,7 +316,33 @@ for i, email_result in enumerate(batch_result['results']):
 }
 ```
 
-#### Batch Email Response
+#### Batch Email Response (Default - Top Prediction Only)
+```json
+{
+  "results": [
+    {
+      "classifications": [
+        {
+          "label": "Billing",
+          "score": 0.9234
+        }
+      ]
+    },
+    {
+      "classifications": [
+        {
+          "label": "Support",
+          "score": 0.8567
+        }
+      ]
+    }
+  ],
+  "total_emails": 2,
+  "processing_time_ms": 245.67
+}
+```
+
+#### Batch Email Response (All Scores)
 ```json
 {
   "results": [
@@ -240,6 +355,10 @@ for i, email_result in enumerate(batch_result['results']):
         {
           "label": "Support",
           "score": 0.0456
+        },
+        {
+          "label": "Marketing",
+          "score": 0.0310
         }
       ]
     },
@@ -252,6 +371,10 @@ for i, email_result in enumerate(batch_result['results']):
         {
           "label": "Billing",
           "score": 0.1234
+        },
+        {
+          "label": "Marketing",
+          "score": 0.0199
         }
       ]
     }
