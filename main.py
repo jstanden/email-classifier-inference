@@ -158,8 +158,19 @@ async def classify_email(
         # Combine subject and body for classification
         combined_text = f"{processed_email['subject']} {processed_email['body']}"
         
+        # Truncate text to fit model's maximum sequence length (usually 512 tokens)
+        # We'll use the tokenizer to ensure proper truncation
+        tokenizer = classifier.tokenizer
+        encoded = tokenizer.encode_plus(
+            combined_text,
+            max_length=512,
+            truncation=True,
+            return_tensors="pt"
+        )
+        truncated_text = tokenizer.decode(encoded['input_ids'][0], skip_special_tokens=True)
+        
         # Perform classification
-        results = classifier(combined_text)
+        results = classifier(truncated_text)
         
         # Extract classifications from the first (and only) result
         all_classifications = []
@@ -230,8 +241,19 @@ async def classify_emails_batch(
             # Combine subject and body for classification
             combined_text = f"{processed_email['subject']} {processed_email['body']}"
             
+            # Truncate text to fit model's maximum sequence length (usually 512 tokens)
+            # We'll use the tokenizer to ensure proper truncation
+            tokenizer = classifier.tokenizer
+            encoded = tokenizer.encode_plus(
+                combined_text,
+                max_length=512,
+                truncation=True,
+                return_tensors="pt"
+            )
+            truncated_text = tokenizer.decode(encoded['input_ids'][0], skip_special_tokens=True)
+            
             # Perform classification
-            classification_results = classifier(combined_text)
+            classification_results = classifier(truncated_text)
             
             # Extract classifications from the first (and only) result
             all_classifications = []
