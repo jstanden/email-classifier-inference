@@ -12,6 +12,8 @@ from inference_hook import customize_email_for_inference
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+ROOT_PATH = os.getenv("ROOT_PATH", "")
+
 # Global variable to store the pipeline
 classifier = None
 
@@ -71,7 +73,8 @@ app = FastAPI(
     title="Email Classifier Inference API",
     description="API for classifying emails using HuggingFace transformers",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    root_path=ROOT_PATH
 )
 
 class EmailRequest(BaseModel):
