@@ -392,13 +392,16 @@ Once the server is running, you can access the interactive API documentation at:
 
 ## Model Details
 
-The API uses the `email_classifier_final` model, which is a text classification model trained to categorize emails. The model:
+The API uses the `email_classifier_final` model, which is a text classification model trained to categorize emails. 
 
+See: https://github.com/jstanden/email-classifier-training/
+
+The model:
 - Combines email subject and body for classification
 - Returns confidence scores for all possible labels
 - Supports GPU acceleration when available (MPS, CUDA, CPU)
 - Automatically loads on server startup
-- Supports 15 classification labels: Memberships, Integrations, CX Security, B5, Marketing, CX Community, Extensions, Windows, XAM, Linux, Mac, MSP, Billing, Android, iOS
+- Supports arbitrary classification labels
 - Uses consistent preprocessing via `inference_hook.py`
 
 ## Performance Considerations
@@ -463,16 +466,16 @@ The API includes comprehensive error handling for:
 ├── main.py              # FastAPI application
 ├── inference_hook.py    # Preprocessing pipeline
 ├── requirements.txt     # Python dependencies
-├── Dockerfile          # Container configuration
-├── docker-compose.yml  # Multi-container setup
-├── deploy.sh           # Deployment script
-├── .dockerignore       # Docker build optimization
-├── README.md           # This file
-├── test_api.py         # Test script
-├── start_server.sh     # Local startup script
+├── Dockerfile           # Container configuration
+├── docker-compose.yml   # Multi-container setup
+├── deploy.sh            # Deployment script
+├── .dockerignore        # Docker build optimization
+├── README.md            # This file
+├── test_api.py          # Test script
+├── start_server.sh      # Local startup script
 └── models/
     └── email_classifier_final/
-        └── ...         # Model files
+        └── ...          # Model files
 ```
 
 ### Testing
