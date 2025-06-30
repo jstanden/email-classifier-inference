@@ -6,13 +6,25 @@ Test script for the Email Classifier Inference API
 import requests
 import json
 import time
+import os
 
 BASE_URL = "http://localhost:8000"
+
+# Check if authentication is required
+API_SECRET_TOKEN = os.getenv("API_SECRET_TOKEN", "")
+HEADERS = {"Content-Type": "application/json"}
+
+if API_SECRET_TOKEN:
+    HEADERS["Authorization"] = f"Bearer {API_SECRET_TOKEN}"
+    print(f"🔐 Using authentication with token: {API_SECRET_TOKEN[:8]}...")
+else:
+    print("🔓 No authentication token set - running tests without authentication")
 
 def test_health():
     """Test the health endpoint"""
     print("Testing health endpoint...")
     try:
+        # Health endpoint is always open - no authentication required
         response = requests.get(f"{BASE_URL}/health")
         print(f"Status: {response.status_code}")
         print(f"Response: {json.dumps(response.json(), indent=2)}")
@@ -25,13 +37,62 @@ def test_model_info():
     """Test the model info endpoint"""
     print("\nTesting model info endpoint...")
     try:
-        response = requests.get(f"{BASE_URL}/model-info")
+        response = requests.get(f"{BASE_URL}/model-info", headers=HEADERS)
         print(f"Status: {response.status_code}")
         print(f"Response: {json.dumps(response.json(), indent=2)}")
         return response.status_code == 200
     except Exception as e:
         print(f"Error: {e}")
         return False
+
+def test_authentication():
+    """Test authentication requirements"""
+    if not API_SECRET_TOKEN:
+        print("\nSkipping authentication tests - no API_SECRET_TOKEN set")
+        return True
+    
+    print("\nTesting authentication...")
+    
+    # Test without token (should fail)
+    print("Testing request without token (should fail):")
+    try:
+        response = requests.get(f"{BASE_URL}/model-info")
+        print(f"Status: {response.status_code}")
+        if response.status_code == 401:
+            print("✅ Correctly rejected request without token")
+        else:
+            print("❌ Should have rejected request without token")
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    # Test with invalid token (should fail)
+    print("\nTesting request with invalid token (should fail):")
+    try:
+        response = requests.get(
+            f"{BASE_URL}/model-info", 
+            headers={"Authorization": "Bearer invalid-token"}
+        )
+        print(f"Status: {response.status_code}")
+        if response.status_code == 401:
+            print("✅ Correctly rejected request with invalid token")
+        else:
+            print("❌ Should have rejected request with invalid token")
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    # Test that health endpoint is always open
+    print("\nTesting that health endpoint is always open:")
+    try:
+        response = requests.get(f"{BASE_URL}/health")
+        print(f"Status: {response.status_code}")
+        if response.status_code == 200:
+            print("✅ Health endpoint is correctly open without authentication")
+        else:
+            print("❌ Health endpoint should be open")
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    return True
 
 def test_classification():
     """Test the classification endpoint"""
@@ -83,7 +144,7 @@ def test_classification():
             response = requests.post(
                 f"{BASE_URL}/classify",
                 json=email,
-                headers={"Content-Type": "application/json"}
+                headers=HEADERS
             )
             
             print(f"  Status: {response.status_code}")
@@ -104,7 +165,7 @@ def test_classification():
             response = requests.post(
                 f"{BASE_URL}/classify?show_all_scores=true",
                 json=email,
-                headers={"Content-Type": "application/json"}
+                headers=HEADERS
             )
             
             print(f"  Status: {response.status_code}")
@@ -158,7 +219,7 @@ def test_batch_classification():
         response = requests.post(
             f"{BASE_URL}/classify-batch",
             json=batch_request,
-            headers={"Content-Type": "application/json"}
+            headers=HEADERS
         )
         
         print(f"Status: {response.status_code}")
@@ -185,7 +246,7 @@ def test_batch_classification():
         response = requests.post(
             f"{BASE_URL}/classify-batch?show_all_scores=true",
             json=batch_request,
-            headers={"Content-Type": "application/json"}
+            headers=HEADERS
         )
         
         print(f"Status: {response.status_code}")
@@ -218,7 +279,7 @@ def test_batch_validation():
         response = requests.post(
             f"{BASE_URL}/classify-batch",
             json={"emails": []},
-            headers={"Content-Type": "application/json"}
+            headers=HEADERS
         )
         print(f"Empty batch status: {response.status_code}")
         if response.status_code == 400:
@@ -235,7 +296,7 @@ def test_batch_validation():
         response = requests.post(
             f"{BASE_URL}/classify-batch",
             json=large_batch,
-            headers={"Content-Type": "application/json"}
+            headers=HEADERS
         )
         print(f"Large batch status: {response.status_code}")
         if response.status_code == 200:
@@ -267,6 +328,9 @@ def main():
     if not model_ok:
         print("\n❌ Model info failed. Check if the model loaded correctly.")
         return
+    
+    # Test authentication (if enabled)
+    test_authentication()
     
     # Test single classification
     test_classification()

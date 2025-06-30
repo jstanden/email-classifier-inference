@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 import torch
@@ -13,9 +14,39 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ROOT_PATH = os.getenv("ROOT_PATH", "")
+API_SECRET_TOKEN = os.getenv("API_SECRET_TOKEN", "")
 
 # Global variable to store the pipeline
 classifier = None
+
+# Security scheme for bearer token
+security = HTTPBearer(auto_error=False)
+
+async def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    """
+    Verify the bearer token if API_SECRET_TOKEN is set.
+    If API_SECRET_TOKEN is not set or empty, no authentication is required.
+    """
+    # If no API secret token is configured, skip authentication
+    if not API_SECRET_TOKEN:
+        return None
+    
+    # If API secret token is configured, require authentication
+    if not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Bearer token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if credentials.credentials != API_SECRET_TOKEN:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return credentials.credentials
 
 def load_model():
     """Load the email classifier model"""
@@ -97,7 +128,7 @@ class BatchEmailResponse(BaseModel):
     processing_time_ms: float
 
 @app.get("/")
-async def root():
+async def root(token: Optional[str] = Depends(verify_token)):
     """Health check endpoint"""
     return {"message": "Email Classifier Inference API is running"}
 
@@ -135,7 +166,8 @@ async def classify_email(
     show_all_scores: bool = Query(
         default=False, 
         description="If True, return all classification scores. If False, return only the top prediction."
-    )
+    ),
+    token: Optional[str] = Depends(verify_token)
 ):
     """
     Classify an email based on its subject and body.
@@ -203,7 +235,8 @@ async def classify_emails_batch(
     show_all_scores: bool = Query(
         default=False, 
         description="If True, return all classification scores for each email. If False, return only the top prediction for each email."
-    )
+    ),
+    token: Optional[str] = Depends(verify_token)
 ):
     """
     Classify multiple emails in a single request.
@@ -291,7 +324,7 @@ async def classify_emails_batch(
         raise HTTPException(status_code=500, detail=f"Batch classification error: {str(e)}")
 
 @app.get("/model-info")
-async def get_model_info():
+async def get_model_info(token: Optional[str] = Depends(verify_token)):
     """Get information about the loaded model"""
     if classifier is None:
         raise HTTPException(status_code=500, detail="Model not loaded")

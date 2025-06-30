@@ -12,6 +12,51 @@ A FastAPI server for email classification using a HuggingFace transformer model 
 - **GPU Support**: Automatic GPU detection and utilization (MPS, CUDA, CPU)
 - **Docker Support**: Easy containerized deployment
 - **Consistent Preprocessing**: Uses inference_hook for training-inference consistency
+- **Optional Authentication**: Bearer token authentication via API_SECRET_TOKEN environment variable
+
+## Security
+
+### Authentication
+
+The API supports optional bearer token authentication using the `API_SECRET_TOKEN` environment variable:
+
+- **If `API_SECRET_TOKEN` is set**: All API requests require a valid bearer token in the Authorization header (except `/health`)
+- **If `API_SECRET_TOKEN` is empty or not set**: No authentication is required (open access)
+- **Note**: The `/health` endpoint is always open and never requires authentication (for monitoring purposes)
+
+#### Setting up Authentication
+
+1. **Environment Variable**:
+```bash
+export API_SECRET_TOKEN="your-secret-token-here"
+```
+
+2. **Docker Compose**:
+```yaml
+environment:
+  - API_SECRET_TOKEN=your-secret-token-here
+```
+
+3. **Using the authenticated API**:
+```bash
+# With curl
+curl -H "Authorization: Bearer your-secret-token-here" \
+     http://localhost:8000/model-info
+
+# With Python requests
+import requests
+
+headers = {"Authorization": "Bearer your-secret-token-here"}
+response = requests.get("http://localhost:8000/model-info", headers=headers)
+```
+
+#### Security Best Practices
+
+- Use a strong, randomly generated token (32+ characters)
+- Keep the token secret and never commit it to version control
+- Rotate tokens regularly in production environments
+- Use HTTPS in production to protect the token in transit
+- Consider using environment files (.env) for local development
 
 ## Setup
 
@@ -100,14 +145,17 @@ The server will be available at `http://localhost:8000`
 ### 1. Health Check
 - **GET** `/health`
 - Returns the status of the API and model
+- **Authentication**: None required (always open for monitoring)
 
 ### 2. Model Information
 - **GET** `/model-info`
 - Returns information about the loaded model
+- **Authentication**: Required if `API_SECRET_TOKEN` is set
 
 ### 3. Single Email Classification
 - **POST** `/classify`
 - Classifies a single email based on subject and body
+- **Authentication**: Required if `API_SECRET_TOKEN` is set
 - **Query Parameters:**
   - `show_all_scores` (bool, default: false): If true, returns all classification scores. If false, returns only the top prediction.
 
@@ -115,6 +163,7 @@ The server will be available at `http://localhost:8000`
 - **POST** `/classify-batch`
 - Classifies multiple emails in a single request (up to 100 emails)
 - More efficient for processing large volumes of emails
+- **Authentication**: Required if `API_SECRET_TOKEN` is set
 - **Query Parameters:**
   - `show_all_scores` (bool, default: false): If true, returns all classification scores for each email. If false, returns only the top prediction for each email.
 
@@ -122,16 +171,31 @@ The server will be available at `http://localhost:8000`
 
 ### Using curl
 
+**Note**: If `API_SECRET_TOKEN` is set, add `-H "Authorization: Bearer your-secret-token-here"` to all curl commands except `/health`.
+
 ```bash
-# Health check
+# Health check (always open - no authentication required)
 curl http://localhost:8000/health
 
-# Get model info
+# Get model info (requires authentication if API_SECRET_TOKEN is set)
 curl http://localhost:8000/model-info
+
+# Get model info with authentication (if API_SECRET_TOKEN is set)
+curl -H "Authorization: Bearer your-secret-token-here" \
+     http://localhost:8000/model-info
 
 # Classify a single email (top prediction only - default)
 curl -X POST "http://localhost:8000/classify" \
      -H "Content-Type: application/json" \
+     -d '{
+       "subject": "Invoice for services",
+       "body": "Please find attached the invoice for the services provided last month."
+     }'
+
+# Classify a single email with authentication (if API_SECRET_TOKEN is set)
+curl -X POST "http://localhost:8000/classify" \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer your-secret-token-here" \
      -d '{
        "subject": "Invoice for services",
        "body": "Please find attached the invoice for the services provided last month."
@@ -190,6 +254,13 @@ curl -X POST "http://localhost:8000/classify-batch?show_all_scores=true" \
 
 ```python
 import requests
+import os
+
+# Set up headers with optional authentication
+headers = {"Content-Type": "application/json"}
+api_token = os.getenv("API_SECRET_TOKEN")
+if api_token:
+    headers["Authorization"] = f"Bearer {api_token}"
 
 # Single email classification (top prediction only - default)
 response = requests.post(
@@ -197,7 +268,8 @@ response = requests.post(
     json={
         "subject": "Invoice for services",
         "body": "Please find attached the invoice for the services provided last month."
-    }
+    },
+    headers=headers
 )
 
 result = response.json()
@@ -211,7 +283,8 @@ response = requests.post(
     json={
         "subject": "Invoice for services",
         "body": "Please find attached the invoice for the services provided last month."
-    }
+    },
+    headers=headers
 )
 
 result = response.json()
@@ -237,7 +310,8 @@ batch_response = requests.post(
                 "body": "Get 50% off all premium features this week!"
             }
         ]
-    }
+    },
+    headers=headers
 )
 
 batch_result = batch_response.json()
@@ -268,7 +342,8 @@ batch_response = requests.post(
                 "body": "Get 50% off all premium features this week!"
             }
         ]
-    }
+    },
+    headers=headers
 )
 
 batch_result = batch_response.json()
@@ -437,8 +512,9 @@ The API automatically detects and uses the best available hardware:
 ### Environment Variables
 
 ```bash
-PYTHONUNBUFFERED=1    # Real-time logging
-PORT=8000             # API port
+PYTHONUNBUFFERED=1       # Real-time logging
+PORT=8000                # API port
+API_SECRET_TOKEN=""      # Optional bearer token for authentication (leave empty for no auth)
 ```
 
 ### Resource Requirements

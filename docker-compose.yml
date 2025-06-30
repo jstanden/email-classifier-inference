@@ -9,6 +9,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
+      # Optional: Set API_SECRET_TOKEN to require bearer token authentication
+      # - API_SECRET_TOKEN=your-secret-token-here
     volumes:
       # Optional: Mount model directory for external model updates
       # - ./models:/app/models:ro
